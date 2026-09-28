@@ -1,0 +1,55 @@
+[build-system]
+requires = ["uv_build>=0.12.6,<0.13"]
+build-backend = "uv_build"
+
+[project]
+name = "unitree-g1-tracking-isaaclab"
+version = "0.1.0"
+description = "Isaac Lab continuation task for a Unitree G1 motion-tracking policy."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "isaaclab-dev[rsl-rl]",
+]
+
+[project.entry-points."isaaclab.tasks"]
+unitree_g1_tracking_isaaclab = "unitree_g1_tracking_isaaclab.tasks"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.11"]
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+prerelease = "allow"
+override-dependencies = [
+  "numpy>=2",
+  "mujoco~=3.12.0",
+  "mujoco-warp~=3.12.0",
+  "newton[sim]==1.6.0",
+  "newton-usd-schemas>=0.4.1",
+  "packaging>=20,<27",
+]
+
+[tool.uv.sources]
+isaaclab-dev = { path = "../IsaacLab", editable = true }
+isaaclab = { path = "../IsaacLab/source/isaaclab", editable = true }
+"isaaclab-assets" = { path = "../IsaacLab/source/isaaclab_assets", editable = true }
+"isaaclab-newton" = { path = "../IsaacLab/source/isaaclab_newton", editable = true }
+"isaaclab-ov" = { path = "../IsaacLab/source/isaaclab_ov", editable = true }
+"isaaclab-physx" = { path = "../IsaacLab/source/isaaclab_physx", editable = true }
+"isaaclab-rl" = { path = "../IsaacLab/source/isaaclab_rl", editable = true }
+"isaaclab-tasks" = { path = "../IsaacLab/source/isaaclab_tasks", editable = true }
+"isaaclab-visualizers" = { path = "../IsaacLab/source/isaaclab_visualizers", editable = true }
+
+[tool.uv.build-backend]
+module-name = "unitree_g1_tracking_isaaclab"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
