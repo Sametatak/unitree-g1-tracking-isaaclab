@@ -480,9 +480,21 @@ def torso_angular_velocity_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg)
     return torch.sum(torch.square(angular_velocity[:, :2]), dim=-1)
 
 
-def bad_anchor_height(env: ManagerBasedRLEnv, command_name: str, threshold: float) -> torch.Tensor:
+def bad_anchor_height(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    threshold: float,
+    phase_threshold: float | None = None,
+    phase_start_s: float | None = None,
+    phase_end_s: float | None = None,
+) -> torch.Tensor:
     command = cast(MotionCommand, env.command_manager.get_term(command_name))
-    return torch.abs(command.anchor_pos_w[:, 2] - command.robot_anchor_pos_w[:, 2]) > threshold
+    error = torch.abs(command.anchor_pos_w[:, 2] - command.robot_anchor_pos_w[:, 2])
+    if phase_threshold is None:
+        return error > threshold
+    in_phase = _in_reference_phase(command, phase_start_s, phase_end_s)
+    active_threshold = torch.where(in_phase, phase_threshold, threshold)
+    return error > active_threshold
 
 
 def bad_anchor_orientation(env: ManagerBasedRLEnv, command_name: str, threshold: float) -> torch.Tensor:
@@ -500,12 +512,16 @@ def bad_end_effector_height(
     body_names: tuple[str, ...],
     ignore_phase_start_s: float | None = None,
     ignore_phase_end_s: float | None = None,
+    phase_threshold: float | None = None,
 ) -> torch.Tensor:
     command = cast(MotionCommand, env.command_manager.get_term(command_name))
     ids = _body_ids(command, body_names)
     error = torch.abs(command.body_pos_relative_w[:, ids, 2] - command.robot_body_pos_w[:, ids, 2])
-    bad = torch.any(error > threshold, dim=-1)
-    return bad & ~_in_reference_phase(command, ignore_phase_start_s, ignore_phase_end_s)
+    in_phase = _in_reference_phase(command, ignore_phase_start_s, ignore_phase_end_s)
+    if phase_threshold is None:
+        return torch.any(error > threshold, dim=-1) & ~in_phase
+    active_threshold = torch.where(in_phase, phase_threshold, threshold).unsqueeze(-1)
+    return torch.any(error > active_threshold, dim=-1)
 
 
 def reward_weight(
@@ -532,4 +548,3 @@ action_rate_l2 = base_mdp.action_rate_l2
 joint_pos_limits = base_mdp.joint_pos_limits
 is_terminated = base_mdp.is_terminated
 time_out = base_mdp.time_out
-

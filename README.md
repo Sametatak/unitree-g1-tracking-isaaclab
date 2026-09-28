@@ -1,7 +1,7 @@
 # Unitree G1 Tracking — Isaac Lab
 
-This is a small external Isaac Lab task for continuing the 29-action
-`Unitree-G1-Tracking-No-State-Estimation` policy with the Newton/MJWarp backend.
+This is a small external Isaac Lab task for training or continuing the 29-action
+`Unitree-G1-Tracking-No-State-Estimation` policy with Isaac Sim PhysX.
 
 The policy contract is intentionally unchanged:
 
@@ -23,6 +23,18 @@ cd /home/forkon/unitree_g1_tracking_isaaclab
 uv sync
 ```
 
+## Train from scratch (recommended)
+
+```bash
+uv run isaaclab train \
+  --rl_library rsl_rl \
+  --task Isaac-Tracking-Flat-G1-No-State-Estimation \
+  --num_envs 512 \
+  --max_iterations 30001 \
+  --run_name g1_tracking_physx_fresh \
+  --visualizer none
+```
+
 ## Continue from the copied MJLab checkpoint
 
 `--max_iterations` is the number of additional iterations. The copied checkpoint
@@ -34,27 +46,39 @@ cd /home/forkon/unitree_g1_tracking_isaaclab
 uv run isaaclab train \
   --rl_library rsl_rl \
   --task Isaac-Tracking-Flat-G1-No-State-Estimation \
-  --num_envs 1024 \
+  --num_envs 512 \
   --checkpoint checkpoints/model_8000.pt \
   --max_iterations 22001 \
-  --run_name g1_tracking_mjlab_continuation
+  --run_name g1_tracking_physx_finetune \
+  --visualizer none
 ```
 
-## Play
+## Watch many robots in Isaac Sim
 
-The Newton visualizer does not require Isaac Sim or Omniverse Kit:
+This opens the Omniverse Kit viewport and displays 256 parallel environments:
 
 ```bash
 uv run isaaclab play \
   --rl_library rsl_rl \
   --task Isaac-Tracking-Flat-G1-No-State-Estimation \
   --checkpoint checkpoints/model_8000.pt \
-  --num_envs 1 \
-  --visualizer newton
+  --num_envs 256 \
+  --visualizer kit
+```
+
+To train while watching all 256 robots in the Kit viewport:
+
+```bash
+uv run isaaclab train \
+  --rl_library rsl_rl \
+  --task Isaac-Tracking-Flat-G1-No-State-Estimation \
+  --num_envs 256 \
+  --max_iterations 30001 \
+  --run_name g1_tracking_physx_visible \
+  --visualizer kit
 ```
 
 The network and optimizer state can be loaded, but changing simulators is still a
 physics-domain transfer. Isaac Lab uses a USD-derived G1 model, so the resumed
 policy may temporarily regress while adapting even though tensor dimensions and
 joint ordering are preserved.
-

@@ -19,7 +19,7 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import UniformNoiseCfg as Unoise
 from isaaclab_assets import G1_29DOF_CFG
-from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg
+from isaaclab_physx.physics import PhysxCfg
 
 from . import mdp
 
@@ -267,7 +267,16 @@ class RewardsCfg:
 @configclass
 class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    anchor_pos = DoneTerm(func=mdp.bad_anchor_height, params={"command_name": "motion", "threshold": 0.25})
+    anchor_pos = DoneTerm(
+        func=mdp.bad_anchor_height,
+        params={
+            "command_name": "motion",
+            "threshold": 0.25,
+            "phase_threshold": 0.50,
+            "phase_start_s": JUMP_PHASE["phase_start_s"],
+            "phase_end_s": JUMP_PHASE["phase_end_s"],
+        },
+    )
     anchor_ori = DoneTerm(
         func=mdp.bad_anchor_orientation, params={"command_name": "motion", "threshold": 0.8}
     )
@@ -284,6 +293,7 @@ class TerminationsCfg:
             ),
             "ignore_phase_start_s": JUMP_PHASE["phase_start_s"],
             "ignore_phase_end_s": JUMP_PHASE["phase_end_s"],
+            "phase_threshold": 0.50,
         },
     )
 
@@ -324,19 +334,9 @@ class G1TrackingEnvCfg(ManagerBasedRLEnvCfg):
     sim: SimulationCfg = SimulationCfg(
         dt=0.005,
         render_interval=4,
-        physics=NewtonCfg(
-            solver_cfg=MJWarpSolverCfg(
-                njmax=250,
-                nconmax=35,
-                iterations=10,
-                ls_iterations=20,
-                cone="pyramidal",
-                impratio=1.0,
-                integrator="implicitfast",
-            ),
-            num_substeps=1,
-            use_cuda_graph=True,
-        ),
+        # Isaac Sim PhysX is intentional: this task is meant to run in the Kit
+        # viewport with many tiled G1 environments visible at the same time.
+        physics=PhysxCfg(),
     )
     scene: G1TrackingSceneCfg = G1TrackingSceneCfg(num_envs=1024, env_spacing=2.5)
     observations: ObservationsCfg = ObservationsCfg()

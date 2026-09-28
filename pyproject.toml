@@ -9,7 +9,7 @@ description = "Isaac Lab continuation task for a Unitree G1 motion-tracking poli
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "isaaclab-dev[rsl-rl]",
+  "isaaclab-dev[isaacsim,rsl-rl]",
 ]
 
 [project.entry-points."isaaclab.tasks"]
@@ -29,6 +29,17 @@ override-dependencies = [
   "newton-usd-schemas>=0.4.1",
   "packaging>=20,<27",
 ]
+
+# Isaac Sim wheels and several Omniverse dependencies are published only on
+# NVIDIA's package index.
+[[tool.uv.index]]
+url = "https://pypi.nvidia.com"
+explicit = false
+
+[[tool.uv.index]]
+name = "pypi-public"
+url = "https://pypi.org/simple"
+explicit = true
 
 [tool.uv.sources]
 isaaclab-dev = { path = "../IsaacLab", editable = true }
