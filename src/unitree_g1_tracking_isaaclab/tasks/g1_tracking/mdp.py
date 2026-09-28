@@ -123,7 +123,13 @@ class MotionLoader:
         self.joint_vel = torch.as_tensor(data["joint_vel"], dtype=torch.float32, device=device)
         source_body_ids = [SOURCE_BODY_NAMES.index(name) for name in body_names]
         self.body_pos_w = torch.as_tensor(data["body_pos_w"][:, source_body_ids], dtype=torch.float32, device=device)
-        self.body_quat_w = torch.as_tensor(data["body_quat_w"][:, source_body_ids], dtype=torch.float32, device=device)
+        body_quat_wxyz = torch.as_tensor(
+            data["body_quat_w"][:, source_body_ids], dtype=torch.float32, device=device
+        )
+        # MJLab/MuJoCo stores quaternions as (w, x, y, z), while Isaac Lab 3
+        # and PhysX expect (x, y, z, w). Without this conversion every G1 is
+        # spawned with a large roll angle and immediately lies on its side.
+        self.body_quat_w = body_quat_wxyz[..., [1, 2, 3, 0]]
         self.body_lin_vel_w = torch.as_tensor(
             data["body_lin_vel_w"][:, source_body_ids], dtype=torch.float32, device=device
         )
