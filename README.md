@@ -57,6 +57,9 @@ uv run isaaclab train \
 
 This opens the Omniverse Kit viewport and displays 256 parallel environments:
 
+The environment nearest the center also shows the NPZ reference pose as a
+semi-transparent cyan ghost skeleton. It does not affect policy observations.
+
 ```bash
 uv run isaaclab play \
   --rl_library rsl_rl \

@@ -8,10 +8,12 @@ from dataclasses import MISSING
 from typing import TYPE_CHECKING, cast
 
 import isaaclab.envs.mdp as base_mdp
+import isaaclab.sim as sim_utils
 import numpy as np
 import torch
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm, CommandTermCfg, SceneEntityCfg
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.math import (
     matrix_from_quat,
@@ -114,6 +116,25 @@ TRACKED_BODY_NAMES = (
 )
 
 
+REFERENCE_GHOST_CFG = VisualizationMarkersCfg(
+    prim_path="/Visuals/G1ReferenceGhost",
+    markers={
+        "link": sim_utils.SphereCfg(
+            radius=0.045,
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=(0.0, 0.85, 1.0), opacity=0.45
+            ),
+        ),
+        "torso": sim_utils.SphereCfg(
+            radius=0.085,
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=(0.0, 0.85, 1.0), opacity=0.45
+            ),
+        ),
+    },
+)
+
+
 class MotionLoader:
     """Load the existing MJLab NPZ and select bodies by its source-name order."""
 
@@ -172,6 +193,11 @@ class MotionCommand(CommandTerm):
         self.body_pos_relative_w = self.body_pos_w.clone()
         self.body_quat_relative_w = self.body_quat_w.clone()
         self.metrics["anchor_pos_error"] = torch.zeros(self.num_envs, device=self.device)
+        # Show the reference only in the environment nearest the scene center.
+        # This keeps the viewport readable and avoids duplicating debug geometry.
+        self.ghost_env_id = int(
+            torch.argmin(torch.linalg.vector_norm(env.scene.env_origins[:, :2], dim=-1))
+        )
 
     @property
     def command(self) -> torch.Tensor:
@@ -311,6 +337,28 @@ class MotionCommand(CommandTerm):
             delta_quat, self.body_pos_w - ref_anchor_pos
         )
 
+    def _set_debug_vis_impl(self, debug_vis: bool) -> None:
+        if debug_vis:
+            if not hasattr(self, "_reference_visualizer"):
+                self._reference_visualizer = VisualizationMarkers(self.cfg.ghost_visualizer_cfg)
+            self._reference_visualizer.set_visibility(True)
+        elif hasattr(self, "_reference_visualizer"):
+            self._reference_visualizer.set_visibility(False)
+
+    def _debug_vis_callback(self, event) -> None:
+        del event
+        body_count = len(self.cfg.body_names)
+        marker_indices = torch.zeros(body_count, dtype=torch.long, device=self.device)
+        marker_indices[self.motion_anchor_body_id] = 1
+        self._reference_visualizer.visualize(
+            translations=self.body_pos_w[self.ghost_env_id],
+            orientations=self.body_quat_w[self.ghost_env_id],
+            marker_indices=marker_indices,
+            environment_ids=torch.full(
+                (body_count,), self.ghost_env_id, dtype=torch.long, device=self.device
+            ),
+        )
+
 
 @configclass
 class MotionCommandCfg(CommandTermCfg):
@@ -326,6 +374,7 @@ class MotionCommandCfg(CommandTermCfg):
     pose_range: dict[str, tuple[float, float]] = {}
     velocity_range: dict[str, tuple[float, float]] = {}
     joint_position_range: tuple[float, float] = (-0.03, 0.03)
+    ghost_visualizer_cfg: VisualizationMarkersCfg = REFERENCE_GHOST_CFG
 
 
 def motion_anchor_pos_b(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:

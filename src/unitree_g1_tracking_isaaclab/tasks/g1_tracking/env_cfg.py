@@ -137,7 +137,9 @@ class CommandsCfg:
     motion = mdp.MotionCommandCfg(
         asset_name="robot",
         resampling_time_range=(1.0e9, 1.0e9),
-        debug_vis=False,
+        # Draw the NPZ target as a cyan ghost skeleton in only the environment
+        # nearest the center of the tiled scene. This is visualization-only.
+        debug_vis=True,
         motion_file=str(MOTION_FILE),
         anchor_body_name="torso_link",
         body_names=mdp.TRACKED_BODY_NAMES,
