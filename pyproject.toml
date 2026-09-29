@@ -42,15 +42,15 @@ url = "https://pypi.org/simple"
 explicit = true
 
 [tool.uv.sources]
-isaaclab-dev = { path = "../IsaacLab", editable = true }
-isaaclab = { path = "../IsaacLab/source/isaaclab", editable = true }
-"isaaclab-assets" = { path = "../IsaacLab/source/isaaclab_assets", editable = true }
-"isaaclab-newton" = { path = "../IsaacLab/source/isaaclab_newton", editable = true }
-"isaaclab-ov" = { path = "../IsaacLab/source/isaaclab_ov", editable = true }
-"isaaclab-physx" = { path = "../IsaacLab/source/isaaclab_physx", editable = true }
-"isaaclab-rl" = { path = "../IsaacLab/source/isaaclab_rl", editable = true }
-"isaaclab-tasks" = { path = "../IsaacLab/source/isaaclab_tasks", editable = true }
-"isaaclab-visualizers" = { path = "../IsaacLab/source/isaaclab_visualizers", editable = true }
+isaaclab-dev = { path = "../../IsaacLab", editable = true }
+isaaclab = { path = "../../IsaacLab/source/isaaclab", editable = true }
+"isaaclab-assets" = { path = "../../IsaacLab/source/isaaclab_assets", editable = true }
+"isaaclab-newton" = { path = "../../IsaacLab/source/isaaclab_newton", editable = true }
+"isaaclab-ov" = { path = "../../IsaacLab/source/isaaclab_ov", editable = true }
+"isaaclab-physx" = { path = "../../IsaacLab/source/isaaclab_physx", editable = true }
+"isaaclab-rl" = { path = "../../IsaacLab/source/isaaclab_rl", editable = true }
+"isaaclab-tasks" = { path = "../../IsaacLab/source/isaaclab_tasks", editable = true }
+"isaaclab-visualizers" = { path = "../../IsaacLab/source/isaaclab_visualizers", editable = true }
 
 [tool.uv.build-backend]
 module-name = "unitree_g1_tracking_isaaclab"

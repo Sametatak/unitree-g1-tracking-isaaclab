@@ -1,6 +1,8 @@
 # Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import math
+import os
 from pathlib import Path
 
 import isaaclab.sim as sim_utils
@@ -25,6 +27,15 @@ from . import mdp
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 MOTION_FILE = REPO_ROOT / "assets" / "motions" / "g1" / "halay_loop.npz"
+
+
+def ground_slope_quat() -> tuple[float, float, float, float]:
+    """Return an xyzw quaternion for the requested platform pitch."""
+    slope_deg = float(os.environ.get("G1_GROUND_SLOPE_DEG", "0.0"))
+    if abs(slope_deg) > 30.0:
+        raise ValueError("G1_GROUND_SLOPE_DEG must be between -30 and 30 degrees.")
+    half_angle = 0.5 * math.radians(slope_deg)
+    return (0.0, math.sin(half_angle), 0.0, math.cos(half_angle))
 
 ACTION_SCALE = {
     ".*_elbow_joint": 0.43857731392336724,
@@ -51,7 +62,7 @@ def make_robot_cfg() -> ArticulationCfg:
     cfg = G1_29DOF_CFG.copy()
     cfg.prim_path = "{ENV_REGEX_NS}/Robot"
     cfg.init_state.pos = (0.0, 0.0, 0.76)
-    cfg.init_state.rot = (1.0, 0.0, 0.0, 0.0)
+    cfg.init_state.rot = (0.0, 0.0, 0.0, 1.0)
     cfg.init_state.joint_pos = {
         ".*_hip_pitch_joint": -0.312,
         ".*_knee_joint": 0.669,
@@ -114,7 +125,34 @@ def make_robot_cfg() -> ArticulationCfg:
 class G1TrackingSceneCfg(InteractiveSceneCfg):
     """Flat scene containing the 29 controlled G1 joints."""
 
-    ground = AssetBaseCfg(prim_path="/World/ground", spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)))
+    # A collision-enabled kinematic platform is cloned under every environment.
+    # Unlike the visual mesh of GroundPlaneCfg, rotating this prim changes the
+    # actual PhysX contact surface. Set its launch angle with
+    # G1_GROUND_SLOPE_DEG, or manipulate one env's Ground prim in Kit.
+    ground = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/Ground",
+        spawn=sim_utils.CuboidCfg(
+            size=(2.4, 2.4, 0.10),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,
+                disable_gravity=True,
+            ),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            physics_material=sim_utils.RigidBodyMaterialCfg(
+                static_friction=1.0,
+                dynamic_friction=0.8,
+                restitution=0.0,
+            ),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=(0.18, 0.20, 0.24),
+                roughness=0.8,
+            ),
+        ),
+        init_state=AssetBaseCfg.InitialStateCfg(
+            pos=(0.0, 0.0, -0.05),
+            rot=ground_slope_quat(),
+        ),
+    )
     robot: ArticulationCfg = make_robot_cfg()
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight", spawn=sim_utils.DomeLightCfg(color=(0.9, 0.9, 0.9), intensity=500.0)

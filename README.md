@@ -85,3 +85,21 @@ The network and optimizer state can be loaded, but changing simulators is still 
 physics-domain transfer. Isaac Lab uses a USD-derived G1 model, so the resumed
 policy may temporarily regress while adapting even though tensor dimensions and
 joint ordering are preserved.
+
+## Physical slope test
+
+The task uses one collision-enabled PhysX platform per environment. Launch with
+a fixed platform pitch (degrees) to test whether the policy reacts to a real
+incline:
+
+```bash
+G1_GROUND_SLOPE_DEG=10 uv run isaaclab play \
+  --rl_library rsl_rl \
+  --task Isaac-Tracking-Flat-G1-No-State-Estimation \
+  --checkpoint checkpoints/model_8500.pt \
+  --num_envs 16 \
+  --visualizer kit
+```
+
+The accepted range is `-30` to `30` degrees. Omit the environment variable for
+the normal flat platform.
