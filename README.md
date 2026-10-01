@@ -18,7 +18,9 @@ The current robustness setup also trains on per-environment ground slopes up to
 20 degrees, randomized foot friction, torso center-of-mass offsets, and wider
 reset perturbations. Recovery fine-tuning ramps lateral pushes from 0.35 to
 0.60 and finally 0.80 m/s while retaining strong torso balance penalties.
-`checkpoints/model_33000.pt` is the starting policy for this recovery stage.
+`checkpoints/model_33000_lr1e-4.pt` contains the same iteration-33000 policy
+weights with only the resumed Adam learning rate raised from 1.5e-5 to 1e-4
+for this short recovery fine-tune.
 
 ## Install
 
@@ -72,9 +74,9 @@ uv run isaaclab train \
   --rl_library rsl_rl \
   --task Isaac-Tracking-Flat-G1-No-State-Estimation \
   --num_envs 512 \
-  --checkpoint checkpoints/model_33000.pt \
+  --checkpoint checkpoints/model_33000_lr1e-4.pt \
   --max_iterations 15000 \
-  --run_name g1_robust_recovery_33000 \
+  --run_name g1_robust_recovery_lr1e4_33000 \
   --visualizer none
 ```
 
