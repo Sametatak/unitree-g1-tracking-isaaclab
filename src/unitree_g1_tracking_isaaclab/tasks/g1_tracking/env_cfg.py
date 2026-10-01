@@ -313,21 +313,22 @@ class TerminationsCfg:
         params={
             "command_name": "motion",
             # Tilted floors shift the physically valid torso height as the feet
-            # move across the platform, so retain margin before declaring a fall.
-            "threshold": 0.35,
-            "phase_threshold": 0.55,
+            # move across the platform. The wider margin also lets the policy
+            # recover from a push instead of terminating at the first stumble.
+            "threshold": 0.45,
+            "phase_threshold": 0.60,
             "phase_start_s": JUMP_PHASE["phase_start_s"],
             "phase_end_s": JUMP_PHASE["phase_end_s"],
         },
     )
     anchor_ori = DoneTerm(
-        func=mdp.bad_anchor_orientation, params={"command_name": "motion", "threshold": 0.8}
+        func=mdp.bad_anchor_orientation, params={"command_name": "motion", "threshold": 0.9}
     )
     ee_body_pos = DoneTerm(
         func=mdp.bad_end_effector_height,
         params={
             "command_name": "motion",
-            "threshold": 0.35,
+            "threshold": 0.45,
             "body_names": (
                 "left_ankle_roll_link",
                 "right_ankle_roll_link",
@@ -336,7 +337,7 @@ class TerminationsCfg:
             ),
             "ignore_phase_start_s": JUMP_PHASE["phase_start_s"],
             "ignore_phase_end_s": JUMP_PHASE["phase_end_s"],
-            "phase_threshold": 0.55,
+            "phase_threshold": 0.60,
         },
     )
 
@@ -385,13 +386,12 @@ class EventsCfg:
         },
     )
 
-    # R1 Gangnam was trained with velocity pushes every 1--3 s. Reintroduce a
-    # slightly gentler version for this first G1 robustness fine-tune so the
-    # existing model is not destroyed by an abrupt jump in task difficulty.
+    # Start gently enough to preserve the motion, then PushCurriculum below
+    # raises lateral disturbances as the policy learns recovery behavior.
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(2.0, 4.0),
+        interval_range_s=(1.5, 3.0),
         params={
             "velocity_range": {
                 "x": (-0.35, 0.35),
@@ -407,13 +407,15 @@ class EventsCfg:
 
 @configclass
 class CurriculumCfg:
+    # Keep balance important throughout fine-tuning. The previous schedule
+    # decayed these terms to -1.0/-0.03, which made imitation dominate recovery.
     body_orientation_weight = CurrTerm(
         func=mdp.reward_weight,
         params={
             "reward_name": "body_orientation_l2",
             "weight_stages": [
-                {"step": 15_000 * 24, "weight": -4.0},
-                {"step": 25_000 * 24, "weight": -1.0},
+                {"step": 5_000 * 24, "weight": -6.0},
+                {"step": 10_000 * 24, "weight": -5.0},
             ],
         },
     )
@@ -422,8 +424,30 @@ class CurriculumCfg:
         params={
             "reward_name": "body_ang_vel",
             "weight_stages": [
-                {"step": 15_000 * 24, "weight": -0.08},
-                {"step": 25_000 * 24, "weight": -0.03},
+                {"step": 5_000 * 24, "weight": -0.15},
+                {"step": 10_000 * 24, "weight": -0.12},
+            ],
+        },
+    )
+    push_strength = CurrTerm(
+        func=mdp.push_velocity_curriculum,
+        params={
+            "event_name": "push_robot",
+            # Steps are environment steps; RSL-RL collects 24 steps per
+            # iteration, hence the multiplication for iteration-based stages.
+            "stages": [
+                {
+                    "step": 2_000 * 24,
+                    "linear_xy": 0.60,
+                    "angular_rp": 0.60,
+                    "angular_yaw": 0.70,
+                },
+                {
+                    "step": 5_000 * 24,
+                    "linear_xy": 0.80,
+                    "angular_rp": 0.80,
+                    "angular_yaw": 0.90,
+                },
             ],
         },
     )

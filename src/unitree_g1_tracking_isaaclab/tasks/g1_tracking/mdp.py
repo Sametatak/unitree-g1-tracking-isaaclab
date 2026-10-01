@@ -635,6 +635,39 @@ def reward_weight(
     return torch.tensor(cfg.weight, device=env.device)
 
 
+def push_velocity_curriculum(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor,
+    event_name: str,
+    stages: list[dict[str, float]],
+) -> dict[str, float]:
+    """Increase push strength in stages while preserving the vertical range."""
+    del env_ids
+    event_cfg = env.event_manager.get_term_cfg(event_name)
+    velocity_range = event_cfg.params["velocity_range"]
+    linear_xy = float(velocity_range["x"][1])
+    angular_rp = float(velocity_range["roll"][1])
+    angular_yaw = float(velocity_range["yaw"][1])
+
+    for stage in stages:
+        if env.common_step_counter > int(stage["step"]):
+            linear_xy = float(stage["linear_xy"])
+            angular_rp = float(stage["angular_rp"])
+            angular_yaw = float(stage["angular_yaw"])
+
+    velocity_range.update(
+        {
+            "x": (-linear_xy, linear_xy),
+            "y": (-linear_xy, linear_xy),
+            "roll": (-angular_rp, angular_rp),
+            "pitch": (-angular_rp, angular_rp),
+            "yaw": (-angular_yaw, angular_yaw),
+        }
+    )
+    env.event_manager.set_term_cfg(event_name, event_cfg)
+    return {"linear_xy": linear_xy, "angular_rp": angular_rp, "angular_yaw": angular_yaw}
+
+
 # Re-export the small set of standard MDP terms used by the environment config.
 generated_commands = base_mdp.generated_commands
 base_lin_vel = base_mdp.base_lin_vel

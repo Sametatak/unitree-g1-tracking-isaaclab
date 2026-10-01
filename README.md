@@ -15,9 +15,10 @@ The jump phase at source frames 59–101 keeps the original motion timing but us
 half-strength imitation rewards. Balance and fall terms remain fully active.
 
 The current robustness setup also trains on per-environment ground slopes up to
-20 degrees, velocity pushes, randomized foot friction, torso center-of-mass
-offsets, and wider reset perturbations. `checkpoints/model_33000.pt` is the
-latest policy trained with this setup.
+20 degrees, randomized foot friction, torso center-of-mass offsets, and wider
+reset perturbations. Recovery fine-tuning ramps lateral pushes from 0.35 to
+0.60 and finally 0.80 m/s while retaining strong torso balance penalties.
+`checkpoints/model_33000.pt` is the starting policy for this recovery stage.
 
 ## Install
 
@@ -58,6 +59,22 @@ uv run isaaclab train \
   --checkpoint checkpoints/model_8000.pt \
   --max_iterations 22001 \
   --run_name g1_tracking_physx_finetune \
+  --visualizer none
+```
+
+## Continue robust recovery training from model 33000
+
+This runs 15,000 additional iterations headless. Push strength increases after
+2,000 and 5,000 additional iterations.
+
+```bash
+uv run isaaclab train \
+  --rl_library rsl_rl \
+  --task Isaac-Tracking-Flat-G1-No-State-Estimation \
+  --num_envs 512 \
+  --checkpoint checkpoints/model_33000.pt \
+  --max_iterations 15000 \
+  --run_name g1_robust_recovery_33000 \
   --visualizer none
 ```
 
