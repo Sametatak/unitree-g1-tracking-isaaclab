@@ -566,6 +566,20 @@ def randomize_ground_tilt(
     )
 
 
+def reset_robot_joint_targets(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor,
+    asset_cfg: SceneEntityCfg,
+) -> None:
+    """Clear stale PD targets without writing velocity to the kinematic ground."""
+    robot: Articulation = env.scene[asset_cfg.name]
+    env_ids = torch.as_tensor(env_ids, dtype=torch.long, device=env.device)
+    default_joint_pos = robot.data.default_joint_pos.torch[env_ids]
+    default_joint_vel = robot.data.default_joint_vel.torch[env_ids]
+    robot.set_joint_position_target_index(target=default_joint_pos, env_ids=env_ids)
+    robot.set_joint_velocity_target_index(target=default_joint_vel, env_ids=env_ids)
+
+
 def bad_anchor_height(
     env: ManagerBasedRLEnv,
     command_name: str,
@@ -629,7 +643,6 @@ joint_pos_rel = base_mdp.joint_pos_rel
 joint_vel_rel = base_mdp.joint_vel_rel
 last_action = base_mdp.last_action
 JointPositionActionCfg = base_mdp.JointPositionActionCfg
-reset_scene_to_default = base_mdp.reset_scene_to_default
 push_by_setting_velocity = base_mdp.push_by_setting_velocity
 randomize_rigid_body_material = base_mdp.randomize_rigid_body_material
 randomize_rigid_body_com = base_mdp.randomize_rigid_body_com

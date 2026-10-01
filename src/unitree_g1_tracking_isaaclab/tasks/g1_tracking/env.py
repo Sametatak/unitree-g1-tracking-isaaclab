@@ -10,6 +10,13 @@ class G1TrackingEnv(ManagerBasedRLEnv):
     """Manager-based environment with ``R`` as a GUI-only manual reset key."""
 
     def __init__(self, *args, **kwargs):
+        # AppLauncher may overwrite cfg.sim.device after play_mode() runs. Do
+        # this once more at the final boundary before SimulationContext creates
+        # the PhysX scene, otherwise Kit's live gizmos hit Direct-GPU-API errors.
+        cfg = kwargs.get("cfg", args[0] if args else None)
+        if cfg is not None and getattr(cfg, "interactive_play", False):
+            cfg.sim.device = "cpu"
+            cfg.sim.use_fabric = False
         super().__init__(*args, **kwargs)
         self._keyboard_input = None
         self._keyboard = None

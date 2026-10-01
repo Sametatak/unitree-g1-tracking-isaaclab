@@ -365,7 +365,14 @@ class EventsCfg:
         },
     )
 
-    reset_scene = EventTerm(func=mdp.reset_scene_to_default, mode="reset", params={"reset_joint_targets": True})
+    # MotionCommand resets the robot pose and velocity from the reference later
+    # in the same reset. Only clear the PD targets here. The generic scene reset
+    # also writes a velocity to the kinematic slope platform, which PhysX rejects.
+    reset_robot_targets = EventTerm(
+        func=mdp.reset_robot_joint_targets,
+        mode="reset",
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
 
     # Each episode sees a different physical floor direction and a total tilt
     # bounded at 20 degrees (including diagonal cross-slopes).
@@ -441,6 +448,9 @@ class G1TrackingEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
     events: EventsCfg = EventsCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
+    # Set only by play_mode(). G1TrackingEnv uses this flag immediately before
+    # SimulationContext construction, after launcher CLI overrides are applied.
+    interactive_play: bool = False
 
     def __post_init__(self) -> None:
         self.decimation = 4
@@ -448,6 +458,13 @@ class G1TrackingEnvCfg(ManagerBasedRLEnvCfg):
 
     def play_mode(self) -> None:
         super().play_mode()
+        self.interactive_play = True
+        # Kit's live transform gizmo and Shift-drag grabber call the regular
+        # PhysX pose API, which is illegal with Direct GPU API. Interactive
+        # playback therefore uses CPU PhysX and USD synchronization. Training
+        # remains CUDA/Fabric accelerated and is unaffected by these overrides.
+        self.sim.device = "cpu"
+        self.sim.use_fabric = False
         self.episode_length_s = 1.0e9
         self.observations.actor.enable_corruption = False
 
