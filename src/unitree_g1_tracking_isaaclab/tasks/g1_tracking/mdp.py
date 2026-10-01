@@ -11,7 +11,7 @@ import isaaclab.envs.mdp as base_mdp
 import isaaclab.sim as sim_utils
 import numpy as np
 import torch
-from isaaclab.assets import Articulation
+from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import CommandTerm, CommandTermCfg, SceneEntityCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.utils import configclass
@@ -324,7 +324,12 @@ class MotionCommand(CommandTerm):
         self.time_steps += 1
         wrapped = torch.where(self.time_steps >= self.motion.time_step_total)[0]
         if wrapped.numel() > 0:
-            self._resample_command(wrapped)
+            if self.cfg.reset_robot_on_motion_wrap:
+                self._resample_command(wrapped)
+            else:
+                # During interactive playback only the reference loops. Keep
+                # the physical robot untouched until the user requests reset.
+                self.time_steps[wrapped] = 0
 
         ref_anchor_pos = self.anchor_pos_w[:, None, :].expand(-1, len(self.cfg.body_names), -1)
         ref_anchor_quat = self.anchor_quat_w[:, None, :].expand(-1, len(self.cfg.body_names), -1)
@@ -374,6 +379,7 @@ class MotionCommandCfg(CommandTermCfg):
     pose_range: dict[str, tuple[float, float]] = {}
     velocity_range: dict[str, tuple[float, float]] = {}
     joint_position_range: tuple[float, float] = (-0.03, 0.03)
+    reset_robot_on_motion_wrap: bool = True
     ghost_visualizer_cfg: VisualizationMarkersCfg = REFERENCE_GHOST_CFG
 
 
@@ -535,6 +541,31 @@ def torso_angular_velocity_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg)
     return torch.sum(torch.square(angular_velocity[:, :2]), dim=-1)
 
 
+def randomize_ground_tilt(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor,
+    max_tilt_deg: float,
+    asset_cfg: SceneEntityCfg,
+) -> None:
+    """Randomize each platform's direction while keeping total tilt bounded."""
+    ground: RigidObject = env.scene[asset_cfg.name]
+    env_ids = torch.as_tensor(env_ids, dtype=torch.long, device=env.device)
+    default_pose = ground.data.default_root_pose.torch[env_ids]
+    positions = default_pose[:, :3] + env.scene.env_origins[env_ids]
+
+    # Sampling roll and pitch independently would allow a diagonal slope near
+    # 28 degrees. Sample a direction and a bounded magnitude instead.
+    magnitude = torch.rand(len(env_ids), device=env.device) * np.deg2rad(max_tilt_deg)
+    direction = torch.rand(len(env_ids), device=env.device) * (2.0 * torch.pi)
+    roll = magnitude * torch.cos(direction)
+    pitch = magnitude * torch.sin(direction)
+    delta = quat_from_euler_xyz(roll, pitch, torch.zeros_like(roll))
+    orientations = quat_mul(default_pose[:, 3:7], delta)
+    ground.write_root_pose_to_sim_index(
+        root_pose=torch.cat((positions, orientations), dim=-1), env_ids=env_ids
+    )
+
+
 def bad_anchor_height(
     env: ManagerBasedRLEnv,
     command_name: str,
@@ -599,6 +630,9 @@ joint_vel_rel = base_mdp.joint_vel_rel
 last_action = base_mdp.last_action
 JointPositionActionCfg = base_mdp.JointPositionActionCfg
 reset_scene_to_default = base_mdp.reset_scene_to_default
+push_by_setting_velocity = base_mdp.push_by_setting_velocity
+randomize_rigid_body_material = base_mdp.randomize_rigid_body_material
+randomize_rigid_body_com = base_mdp.randomize_rigid_body_com
 action_rate_l2 = base_mdp.action_rate_l2
 joint_pos_limits = base_mdp.joint_pos_limits
 is_terminated = base_mdp.is_terminated

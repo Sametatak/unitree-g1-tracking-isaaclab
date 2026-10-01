@@ -5,7 +5,7 @@ import gymnasium as gym
 
 gym.register(
     id="Isaac-Tracking-Flat-G1-No-State-Estimation",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point=f"{__name__}.env:G1TrackingEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.env_cfg:G1TrackingEnvCfg",
@@ -13,4 +13,3 @@ gym.register(
         "default_agent": "rsl_rl",
     },
 )
-

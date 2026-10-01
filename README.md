@@ -14,12 +14,20 @@ The policy contract is intentionally unchanged:
 The jump phase at source frames 59–101 keeps the original motion timing but uses
 half-strength imitation rewards. Balance and fall terms remain fully active.
 
+The current robustness setup also trains on per-environment ground slopes up to
+20 degrees, velocity pushes, randomized foot friction, torso center-of-mass
+offsets, and wider reset perturbations. `checkpoints/model_33000.pt` is the
+latest policy trained with this setup.
+
 ## Install
 
-The project uses the local Isaac Lab checkout at `/home/forkon/IsaacLab`:
+The relative paths in `pyproject.toml` expect the repository one directory
+below a workspace root containing the `IsaacLab` checkout:
 
 ```bash
-cd /home/forkon/unitree_g1_tracking_isaaclab
+mkdir -p projects
+git clone https://github.com/Sametatak/unitree-g1-tracking-isaaclab.git projects/unitree-g1-tracking-isaaclab
+cd projects/unitree-g1-tracking-isaaclab
 uv sync
 ```
 
@@ -41,7 +49,7 @@ uv run isaaclab train \
 is `model_8000.pt`, so 22,001 additional iterations end at iteration 30,000.
 
 ```bash
-cd /home/forkon/unitree_g1_tracking_isaaclab
+cd unitree-g1-tracking-isaaclab
 
 uv run isaaclab train \
   --rl_library rsl_rl \
@@ -93,13 +101,22 @@ a fixed platform pitch (degrees) to test whether the policy reacts to a real
 incline:
 
 ```bash
-G1_GROUND_SLOPE_DEG=10 uv run isaaclab play \
+G1_GROUND_SLOPE_DEG=0 uv run isaaclab play \
   --rl_library rsl_rl \
   --task Isaac-Tracking-Flat-G1-No-State-Estimation \
-  --checkpoint checkpoints/model_8500.pt \
-  --num_envs 16 \
+  --checkpoint checkpoints/model_33000.pt \
+  --num_envs 1 \
+  --device cpu \
+  --disable_fabric \
   --visualizer kit
 ```
 
 The accepted range is `-30` to `30` degrees. Omit the environment variable for
-the normal flat platform.
+the normal flat platform. In interactive playback:
+
+- Select `/World/envs/env_0/Ground` to rotate the physical platform live.
+- Hold **Shift + left mouse button** on a robot link and drag to apply a
+  physical disturbance.
+- Press **R** while the viewport has focus to reset the episode manually.
+- Automatic fall, orientation, height, timeout, and motion-loop resets are
+  disabled during playback so failures remain visible.

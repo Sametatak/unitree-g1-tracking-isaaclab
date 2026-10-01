@@ -7,7 +7,7 @@ from pathlib import Path
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
-from isaaclab.assets import ArticulationCfg, AssetBaseCfg
+from isaaclab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -129,7 +129,9 @@ class G1TrackingSceneCfg(InteractiveSceneCfg):
     # Unlike the visual mesh of GroundPlaneCfg, rotating this prim changes the
     # actual PhysX contact surface. Set its launch angle with
     # G1_GROUND_SLOPE_DEG, or manipulate one env's Ground prim in Kit.
-    ground = AssetBaseCfg(
+    # Keep the platform as a real rigid object so every cloned environment can
+    # receive its own randomized pose during robustness fine-tuning.
+    ground = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/Ground",
         spawn=sim_utils.CuboidCfg(
             size=(2.4, 2.4, 0.10),
@@ -148,7 +150,7 @@ class G1TrackingSceneCfg(InteractiveSceneCfg):
                 roughness=0.8,
             ),
         ),
-        init_state=AssetBaseCfg.InitialStateCfg(
+        init_state=RigidObjectCfg.InitialStateCfg(
             pos=(0.0, 0.0, -0.05),
             rot=ground_slope_quat(),
         ),
@@ -184,22 +186,22 @@ class CommandsCfg:
         joint_names=mdp.G1_JOINT_NAMES,
         start_time_s=4.18,
         pose_range={
-            "x": (-0.02, 0.02),
-            "y": (-0.02, 0.02),
-            "z": (-0.005, 0.005),
-            "roll": (-0.03, 0.03),
-            "pitch": (-0.03, 0.03),
-            "yaw": (-0.05, 0.05),
+            "x": (-0.03, 0.03),
+            "y": (-0.03, 0.03),
+            "z": (-0.01, 0.01),
+            "roll": (-0.06, 0.06),
+            "pitch": (-0.06, 0.06),
+            "yaw": (-0.10, 0.10),
         },
         velocity_range={
-            "x": (-0.1, 0.1),
-            "y": (-0.1, 0.1),
-            "z": (-0.05, 0.05),
-            "roll": (-0.1, 0.1),
-            "pitch": (-0.1, 0.1),
-            "yaw": (-0.2, 0.2),
+            "x": (-0.2, 0.2),
+            "y": (-0.2, 0.2),
+            "z": (-0.1, 0.1),
+            "roll": (-0.3, 0.3),
+            "pitch": (-0.3, 0.3),
+            "yaw": (-0.4, 0.4),
         },
-        joint_position_range=(-0.03, 0.03),
+        joint_position_range=(-0.05, 0.05),
     )
 
 
@@ -311,8 +313,10 @@ class TerminationsCfg:
         func=mdp.bad_anchor_height,
         params={
             "command_name": "motion",
-            "threshold": 0.25,
-            "phase_threshold": 0.50,
+            # Tilted floors shift the physically valid torso height as the feet
+            # move across the platform, so retain margin before declaring a fall.
+            "threshold": 0.35,
+            "phase_threshold": 0.55,
             "phase_start_s": JUMP_PHASE["phase_start_s"],
             "phase_end_s": JUMP_PHASE["phase_end_s"],
         },
@@ -324,7 +328,7 @@ class TerminationsCfg:
         func=mdp.bad_end_effector_height,
         params={
             "command_name": "motion",
-            "threshold": 0.25,
+            "threshold": 0.35,
             "body_names": (
                 "left_ankle_roll_link",
                 "right_ankle_roll_link",
@@ -333,14 +337,66 @@ class TerminationsCfg:
             ),
             "ignore_phase_start_s": JUMP_PHASE["phase_start_s"],
             "ignore_phase_end_s": JUMP_PHASE["phase_end_s"],
-            "phase_threshold": 0.50,
+            "phase_threshold": 0.55,
         },
     )
 
 
 @configclass
 class EventsCfg:
+    # Mild sim-to-real randomization, narrower than the R1 training ranges so a
+    # mature G1 checkpoint can adapt without forgetting the learned dance.
+    foot_material = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=[".*_ankle_roll_link"]),
+            "static_friction_range": (0.6, 1.2),
+            "dynamic_friction_range": (0.5, 1.0),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 64,
+        },
+    )
+    torso_com = EventTerm(
+        func=mdp.randomize_rigid_body_com,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["torso_link"]),
+            "com_range": {"x": (-0.02, 0.02), "y": (-0.02, 0.02), "z": (-0.01, 0.01)},
+        },
+    )
+
     reset_scene = EventTerm(func=mdp.reset_scene_to_default, mode="reset", params={"reset_joint_targets": True})
+
+    # Each episode sees a different physical floor direction and a total tilt
+    # bounded at 20 degrees (including diagonal cross-slopes).
+    randomize_ground_tilt = EventTerm(
+        func=mdp.randomize_ground_tilt,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("ground"),
+            "max_tilt_deg": 20.0,
+        },
+    )
+
+    # R1 Gangnam was trained with velocity pushes every 1--3 s. Reintroduce a
+    # slightly gentler version for this first G1 robustness fine-tune so the
+    # existing model is not destroyed by an abrupt jump in task difficulty.
+    push_robot = EventTerm(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(2.0, 4.0),
+        params={
+            "velocity_range": {
+                "x": (-0.35, 0.35),
+                "y": (-0.35, 0.35),
+                "z": (-0.10, 0.10),
+                "roll": (-0.35, 0.35),
+                "pitch": (-0.35, 0.35),
+                "yaw": (-0.50, 0.50),
+            }
+        },
+    )
 
 
 @configclass
@@ -395,7 +451,37 @@ class G1TrackingEnvCfg(ManagerBasedRLEnvCfg):
         super().play_mode()
         self.episode_length_s = 1.0e9
         self.observations.actor.enable_corruption = False
+
+        # Training needs a tensor-managed RigidObject so every environment can
+        # receive a randomized slope. During interactive playback, however,
+        # Kit's transform manipulator may rebuild the cuboid mesh. Rebuilding a
+        # shape owned by a PhysX tensor view invalidates the entire simulation.
+        # Spawn the same physical collider as an unmanaged scene asset in play
+        # mode, matching the standalone R1 player and allowing live USD edits.
+        managed_ground = self.scene.ground
+        self.scene.ground = AssetBaseCfg(
+            prim_path=managed_ground.prim_path,
+            spawn=managed_ground.spawn,
+            init_state=AssetBaseCfg.InitialStateCfg(
+                pos=managed_ground.init_state.pos,
+                rot=managed_ground.init_state.rot,
+            ),
+            collision_group=managed_ground.collision_group,
+        )
+
         self.commands.motion.pose_range = {}
         self.commands.motion.velocity_range = {}
         self.commands.motion.joint_position_range = (0.0, 0.0)
+        self.commands.motion.reset_robot_on_motion_wrap = False
+        # Evaluation starts deterministic. Set G1_GROUND_SLOPE_DEG to test a
+        # chosen fixed incline; training still uses independent random slopes.
+        self.events.randomize_ground_tilt = None
+        self.events.push_robot = None
+        # Playback is a robustness test: never hide a failure by automatically
+        # respawning the robot. The IsaacLab window's "Reset Episode" button is
+        # still handled by ManagerBasedRLEnv and remains the only reset trigger.
+        self.terminations.time_out = None
+        self.terminations.anchor_pos = None
+        self.terminations.anchor_ori = None
+        self.terminations.ee_body_pos = None
         self.curriculum = {}
